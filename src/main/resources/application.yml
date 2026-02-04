@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: ai-agent-demo
+  profiles:
+    active: local
+
+server:
+  port: 8099
+  servlet:
+    context-path: /api
+
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: io.github.jusibunny.demo.aiagentdemo.controller
+
+knife4j:
+  enable: false # 关闭 Knife4j 的增强配置
+  setting:
+    language: zh_cn
