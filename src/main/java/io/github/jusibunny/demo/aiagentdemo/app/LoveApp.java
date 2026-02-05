@@ -1,16 +1,18 @@
 package io.github.jusibunny.demo.aiagentdemo.app;
 
 
+import io.github.jusibunny.demo.aiagentdemo.advisor.CustomLoggerAdvisor;
+import io.github.jusibunny.demo.aiagentdemo.chat.memory.FileBasedChatMemory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.InMemoryChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Slf4j
 @Component
@@ -24,13 +26,21 @@ public class LoveApp {
     private final ChatClient chatClient;
 
     public LoveApp(ChatModel dashscopeChatModel) {
-        ChatMemory chatMemory = new InMemoryChatMemory();
+
+        // 初始化基于文件的会话记忆
+        String fileDir = System.getProperty("user.dir") + "/tmp/chat-memory";
+        ChatMemory chatMemory = new FileBasedChatMemory(fileDir);
+
+        // 初始化基于内存的会话记忆
+        // ChatMemory chatMemory = new InMemoryChatMemory();
 
         this.chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
                         new MessageChatMemoryAdvisor(chatMemory),
-                        new SimpleLoggerAdvisor() // Spring AI 内置日志拦截器（DEBUG 级别）
+                        // new SimpleLoggerAdvisor(), // Spring AI 内置日志拦截器（DEBUG 级别）
+                        new CustomLoggerAdvisor() // 自定义日志 Advisor，可按需开启
+                        // new ReReadingAdvisor() // Re2 Advisor
                 )
                 .build();
     }
@@ -54,5 +64,29 @@ public class LoveApp {
         String text = chatResponse.getResult().getOutput().getText();
         log.info("text: {}", text);
         return text;
+    }
+
+    /**
+     * AI 恋爱报告功能（实战结构化输出）
+     *
+     * @param message        用户输入
+     * @param conversationId 会话 ID
+     * @return 恋爱报告
+     */
+    public LoveReport doChatWithReport(String message, String conversationId) {
+        LoveReport loveReport = chatClient
+                .prompt()
+                .system(SYSTEM_PROMPT + "每次对话后都要生成恋爱结果，标题为{用户名}的恋爱报告，内容为建议列表")
+                .user(message)
+                .advisors(spec -> spec
+                        .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
+                        .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                .call()
+                .entity(LoveReport.class);
+        log.info("loveReport: {}", loveReport);
+        return loveReport;
+    }
+
+    record LoveReport(String title, List<String> suggestions) {
     }
 }
