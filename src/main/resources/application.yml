@@ -3,6 +3,9 @@ spring:
     name: ai-agent-demo
   profiles:
     active: local
+  output:
+    ansi:
+      enabled: ALWAYS
 
 server:
   port: 8099
@@ -27,3 +30,8 @@ knife4j:
   enable: false # 关闭 Knife4j 的增强配置
   setting:
     language: zh_cn
+
+logging:
+  level:
+    root: info # 门槛 = INFO
+    org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor: debug  # 门槛 = DEBUG（仅该包）
