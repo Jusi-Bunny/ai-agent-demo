@@ -2,15 +2,16 @@ package io.github.jusibunny.demo.aiagentdemo.app;
 
 
 import io.github.jusibunny.demo.aiagentdemo.advisor.CustomLoggerAdvisor;
-import io.github.jusibunny.demo.aiagentdemo.chat.memory.FileBasedChatMemory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -28,16 +29,22 @@ public class LoveApp {
     public LoveApp(ChatModel dashscopeChatModel) {
 
         // 初始化基于文件的会话记忆
-        String fileDir = System.getProperty("user.dir") + "/tmp/chat-memory";
-        ChatMemory chatMemory = new FileBasedChatMemory(fileDir);
+        // String fileDir = System.getProperty("user.dir") + "/tmp/chat-memory";
+        // ChatMemory chatMemory = new FileBasedChatMemory(fileDir);
 
         // 初始化基于内存的会话记忆
+        MessageWindowChatMemory chatMemory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                .maxMessages(20)
+                .build();
+
         // ChatMemory chatMemory = new InMemoryChatMemory();
 
         this.chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
-                        new MessageChatMemoryAdvisor(chatMemory),
+                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        // new MessageChatMemoryAdvisor(chatMemory),
                         // new SimpleLoggerAdvisor(), // Spring AI 内置日志拦截器（DEBUG 级别）
                         new CustomLoggerAdvisor() // 自定义日志 Advisor，可按需开启
                         // new ReReadingAdvisor() // Re2 Advisor
@@ -57,8 +64,10 @@ public class LoveApp {
                 .prompt()
                 .user(message)
                 .advisors(spec -> spec
-                        .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
-                        .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                                .param(ChatMemory.CONVERSATION_ID, conversationId)
+                        // .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
+                        // .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10)
+                )
                 .call()
                 .chatResponse();
         String text = chatResponse.getResult().getOutput().getText();
@@ -79,8 +88,10 @@ public class LoveApp {
                 .system(SYSTEM_PROMPT + "每次对话后都要生成恋爱结果，标题为{用户名}的恋爱报告，内容为建议列表")
                 .user(message)
                 .advisors(spec -> spec
-                        .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
-                        .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                                .param(ChatMemory.CONVERSATION_ID, conversationId)
+                        // .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
+                        // .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10)
+                )
                 .call()
                 .entity(LoveReport.class);
         log.info("loveReport: {}", loveReport);
@@ -88,5 +99,25 @@ public class LoveApp {
     }
 
     record LoveReport(String title, List<String> suggestions) {
+    }
+
+    /**
+     * AI 基础对话（支持多轮对话记忆，SSE 流式传输）
+     *
+     * @param message        用户消息
+     * @param conversationId 会话 ID
+     * @return 响应流
+     */
+    public Flux<String> doChatByStream(String message, String conversationId) {
+        return chatClient
+                .prompt()
+                .user(message)
+                .advisors(spec -> spec
+                                .param(ChatMemory.CONVERSATION_ID, conversationId)
+                        // .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
+                        // .param(AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10)
+                )
+                .stream()
+                .content();
     }
 }
